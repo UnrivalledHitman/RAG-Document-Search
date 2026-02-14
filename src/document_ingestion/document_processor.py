@@ -12,13 +12,16 @@ from langchain_community.document_loaders import (
 
 
 class DocumentProcessor:
-    # Handle document loading and processing
+    """Handle document loading and processing."""
 
     def __init__(self, chunk_size: int = 500, chunk_overlap: int = 50):
-        # Initialize document processor
-        # Args:
-        #   chunk_size: Size of text chunks
-        #   chunk_overlap: Overlap between chunks
+        """
+        Initialize document processor.
+
+        Args:
+            chunk_size: Size of text chunks
+            chunk_overlap: Overlap between chunks
+        """
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.splitter = RecursiveCharacterTextSplitter(
@@ -26,31 +29,35 @@ class DocumentProcessor:
         )
 
     def load_from_url(self, url: str) -> List[Document]:
-        # Load document(s) from a URL
+        """Load document(s) from a URL."""
         loader = WebBaseLoader(url)
         return loader.load()
 
     def load_from_pdf_dir(self, directory: Union[str, Path]) -> List[Document]:
-        # Load documents from all PDFs inside a directory
+        """Load documents from all PDFs inside a directory."""
         loader = PyPDFDirectoryLoader(str(directory))
         return loader.load()
 
     def load_from_txt(self, file_path: Union[str, Path]) -> List[Document]:
-        # Load document(s) from a TXT file
+        """Load document(s) from a TXT file."""
         loader = TextLoader(str(file_path), encoding="utf-8")
         return loader.load()
 
     def load_from_pdf(self, file_path: Union[str, Path]) -> List[Document]:
-        # Load document(s) from a single PDF file
+        """Load document(s) from a single PDF file."""
         loader = PyPDFLoader(str(file_path))
         return loader.load()
 
     def load_documents(self, sources: List[str]) -> List[Document]:
-        # Load documents from URLs, PDF directories, PDF files, or TXT files
-        # Args:
-        #   sources: List of URLs, PDF folder paths, PDF file paths, or TXT file paths
-        # Returns:
-        #   List of loaded documents
+        """
+        Load documents from URLs, PDF directories, PDF files, or TXT files.
+
+        Args:
+            sources: List of URLs, PDF folder paths, PDF file paths, or TXT file paths
+
+        Returns:
+            List of loaded documents
+        """
         docs: List[Document] = []
 
         for src in sources:
@@ -76,18 +83,26 @@ class DocumentProcessor:
         return docs
 
     def split_documents(self, documents: List[Document]) -> List[Document]:
-        # Split documents into chunks
-        # Args:
-        #   documents: List of documents to split
-        # Returns:
-        #   List of split documents
+        """
+        Split documents into chunks.
+
+        Args:
+            documents: List of documents to split
+
+        Returns:
+            List of split documents
+        """
         return self.splitter.split_documents(documents)
 
     def process_sources(self, sources: List[str]) -> List[Document]:
-        # Complete pipeline to load and split documents
-        # Args:
-        #   sources: List of URLs or file paths to process
-        # Returns:
-        #   List of processed document chunks
+        """
+        Complete pipeline to load and split documents.
+
+        Args:
+            sources: List of URLs or file paths to process
+
+        Returns:
+            List of processed document chunks
+        """
         docs = self.load_documents(sources)
         return self.split_documents(docs)
