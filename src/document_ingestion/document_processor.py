@@ -9,6 +9,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import (
     WebBaseLoader,
     TextLoader,
+    PyPDFLoader,
     PyPDFDirectoryLoader,
 )
 
@@ -47,7 +48,7 @@ class DocumentProcessor:
 
     def load_from_pdf(self, file_path: Union[str, Path]) -> List[Document]:
         """Load document(s) from a PDF file"""
-        loader = PyPDFDirectoryLoader(str("data"))
+        loader = PyPDFLoader(str(file_path))
         return loader.load()
 
     def load_documents(self, sources: List[str]) -> List[Document]:
@@ -62,19 +63,28 @@ class DocumentProcessor:
         """
         docs: List[Document] = []
         for src in sources:
-            if src.startswith("http://") or src.startswith("https://"):
+            # URL case
+            if src.startswith(("http://", "https://")):
                 docs.extend(self.load_from_url(src))
+                continue
 
-            path = Path("data")
-            if path.is_dir():  # PDF directory
+            path = Path(src)
+
+            # Directory (PDF folder)
+            if path.is_dir():
                 docs.extend(self.load_from_pdf_dir(path))
+
+            # Single TXT
             elif path.suffix.lower() == ".txt":
                 docs.extend(self.load_from_txt(path))
+
+            # Single PDF
+            elif path.suffix.lower() == ".pdf":
+                docs.extend(self.load_from_pdf(path))
+
             else:
-                raise ValueError(
-                    f"Unsupported source type: {src}. "
-                    "Use URL, .txt file, or PDF directory."
-                )
+                raise ValueError(f"Unsupported source type: {src}")
+
         return docs
 
     def split_documents(self, documents: List[Document]) -> List[Document]:
@@ -89,7 +99,7 @@ class DocumentProcessor:
         """
         return self.splitter.split_documents(documents)
 
-    def process_urls(self, urls: List[str]) -> List[Document]:
+    def process_sources(self, urls: List[str]) -> List[Document]:
         """
         Complete pipeline to load and split documents
 

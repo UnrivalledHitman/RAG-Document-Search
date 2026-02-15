@@ -6,7 +6,9 @@ from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
 
 
-def load_embeddings(model_name: str = "BAAI/bge-large-en-v1.5", device: str = "cpu"):
+def load_embeddings(
+    model_name: str = "sentence-transformers/all-MiniLM-L6-v2", device: str = "cpu"
+):
     """Load embedding model, trying local first then downloading if needed"""
     model_kwargs = {"device": device}
 

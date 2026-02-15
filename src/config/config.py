@@ -11,7 +11,7 @@ class Config:
     """Configuration class for RAG system"""
 
     # Model Configuration
-    LLM_MODEL = "gemini-3-pro-preview"
+    LLM_MODEL = "openai/gpt-oss-20b"
 
     # Document Processing
     CHUNK_SIZE = 500
@@ -26,4 +26,4 @@ class Config:
     @classmethod
     def get_llm(cls):
         """Initialize and return the LLM model"""
-        return init_chat_model(cls.LLM_MODEL)
+        return init_chat_model(cls.LLM_MODEL, model_provider="groq")

@@ -30,7 +30,7 @@ dependencies = [
     "langgraph>=1.0.6",
     "langgraph-cli[inmem]>=0.4.12",
     "wikipedia",
-    "streamlit",
+    "chainlit",
     "requests>=2.32.5",
 ]
 
