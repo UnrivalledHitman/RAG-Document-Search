@@ -2,6 +2,7 @@
 
 import uuid
 import sys
+import os
 from typing import List, Optional
 
 # Inject uuid into globals for type hint evaluation
@@ -15,6 +16,9 @@ from langchain_core.runnables import Runnable
 from langchain_core.tools import Tool
 from langchain_core.messages import HumanMessage
 from langchain.agents import create_agent
+
+# Tavily Search
+from langchain_community.tools.tavily_search import TavilySearchResults
 
 
 class RAGNodes:
@@ -33,7 +37,7 @@ class RAGNodes:
         return RAGState(question=state.question, retrieved_docs=docs)
 
     def _build_tools(self) -> List[Tool]:
-        """Build retriever tool"""
+        """Build retriever + Tavily search tools"""
 
         def retriever_tool_fn(query: str) -> str:
             """Retrieve relevant documents from the indexed corpus"""
@@ -55,11 +59,66 @@ class RAGNodes:
 
         retriever_tool = Tool(
             name="retriever",
-            description="Fetch passages from the indexed document corpus. Use this to find relevant information from the user's uploaded documents.",
+            description="Fetch passages from the indexed document corpus. Use this FIRST for information from uploaded documents.",
             func=retriever_tool_fn,
         )
 
-        return [retriever_tool]
+        # Tavily Search Tool
+        tools = [retriever_tool]
+
+        try:
+            # Check if API key is set
+            if not os.getenv("TAVILY_API_KEY"):
+                print("⚠️ TAVILY_API_KEY not set. Web search will not be available.")
+                return tools
+
+            # Initialize Tavily
+            tavily_search = TavilySearchResults(
+                max_results=3,
+                search_depth="basic",  # or "advanced" for better results
+                include_answer=True,
+                include_raw_content=False,
+            )
+
+            def tavily_tool_fn(query: str) -> str:
+                """Search the web using Tavily"""
+                print(f"🌐 Tavily search: {query[:50]}...")
+                try:
+                    results = tavily_search.invoke(query)
+
+                    if not results:
+                        return "No search results found."
+
+                    # Format results
+                    formatted = []
+                    for i, result in enumerate(results, 1):
+                        title = result.get("title", "No title")
+                        content = result.get("content", "")
+                        url = result.get("url", "")
+
+                        formatted.append(f"[{i}] {title}\n{content}\nSource: {url}")
+
+                    output = "\n\n".join(formatted)
+                    print(f"✅ Tavily returned {len(results)} results")
+                    return output
+
+                except Exception as e:
+                    print(f"❌ Tavily search failed: {e}")
+                    return f"Search failed: {str(e)}"
+
+            tavily_tool = Tool(
+                name="web_search",
+                description="Search the web for current information, news, facts, or general knowledge not available in the documents. Use this for recent events or information beyond the document corpus.",
+                func=tavily_tool_fn,
+            )
+
+            tools.append(tavily_tool)
+            print("✅ Tavily search tool enabled")
+
+        except Exception as e:
+            print(f"⚠️ Tavily tool initialization failed: {e}. Using only retriever.")
+
+        return tools
 
     def _build_agent(self) -> Runnable:
         """Create ReAct agent with tools"""
@@ -67,15 +126,15 @@ class RAGNodes:
         tools = self._build_tools()
 
         system_prompt = (
-            "You are a helpful RAG assistant. "
-            "Use the 'retriever' tool to search through the indexed documents. "
-            "Always check the retriever before answering questions about the documents. "
-            "Provide clear, concise answers based on the retrieved information. "
-            "If you cannot find relevant information, say so honestly."
+            "You are a helpful RAG assistant with access to document retrieval and web search. "
+            "ALWAYS use 'retriever' FIRST for questions about the uploaded documents. "
+            "Use 'web_search' (Tavily) only for current events, recent news, or general knowledge not in the documents. "
+            "Provide clear, accurate, and well-sourced answers. "
+            "Cite your sources when using web search results."
         )
 
         agent = create_agent(self.llm, tools=tools, system_prompt=system_prompt)
-        print("✅ ReAct agent built successfully")
+        print(f"✅ ReAct agent built successfully with {len(tools)} tools")
         return agent
 
     def generate_answer(self, state: RAGState) -> RAGState:
