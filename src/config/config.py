@@ -20,7 +20,7 @@ class Config:
     CHUNK_OVERLAP = 50
 
     # Data paths
-    DATA_FOLDER = Path("data")
+    DATA_FOLDER = Path("data") if Path("data").exists() else None
 
     # Web sources
     WEB_URLS = [
@@ -51,7 +51,7 @@ class Config:
         """
         sources = []
 
-        if source_type in ["local", "both"]:
+        if source_type in ["local", "both"] and cls.DATA_FOLDER:
             sources.append(str(cls.DATA_FOLDER))
 
         if source_type in ["web", "both"]:

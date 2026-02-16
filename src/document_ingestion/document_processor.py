@@ -79,7 +79,7 @@ class DocumentProcessor:
                 docs.extend(self.load_from_txt(path))
 
             # Single PDF
-            elif path.suffix.lower() == ".pdf":
+            elif path.suffix.lower() == ".pdf" or str(src).lower().endswith(".pdf"):
                 docs.extend(self.load_from_pdf(path))
 
             else:

@@ -1,5 +1,6 @@
 """
 Streamlit UI for Agentic RAG System - With Toggle Source Selection
+(Updated: Uploaded files are saved directly into /data folder)
 """
 
 import streamlit as st
@@ -38,7 +39,6 @@ st.set_page_config(
 
 # Initialize session state
 def init_session_state():
-    """Initialize all session state variables"""
     if "rag_system" not in st.session_state:
         st.session_state.rag_system = None
     if "is_ready" not in st.session_state:
@@ -46,27 +46,21 @@ def init_session_state():
     if "messages" not in st.session_state:
         st.session_state.messages = []
     if "source_choice" not in st.session_state:
-        st.session_state.source_choice = "local"  # Default
+        st.session_state.source_choice = "local"
     if "initialized_with" not in st.session_state:
         st.session_state.initialized_with = None
     if "uploaded_files" not in st.session_state:
         st.session_state.uploaded_files = []
-        st.session_state.initialized_with = None
 
 
 @st.cache_resource
-def load_rag_system(source_choice: str, _uploaded_file_paths: Optional[list] = None):
+def load_rag_system(source_choice: str):
     """Load RAG system with caching"""
     try:
         logger.info(f"Loading RAG system with sources: {source_choice}")
 
         # Get sources based on choice
         sources = Config.get_sources(source_choice)
-
-        # Add uploaded files to sources
-        if _uploaded_file_paths:
-            sources.extend(_uploaded_file_paths)
-            logger.info(f"Added {len(_uploaded_file_paths)} uploaded files")
 
         # Step 1: Initialize LLM
         with st.spinner("⏳ Step 1/4: Initializing LLM..."):
@@ -81,6 +75,9 @@ def load_rag_system(source_choice: str, _uploaded_file_paths: Optional[list] = N
             )
             documents = doc_processor.process_sources(sources)
             logger.info(f"Processed {len(documents)} document chunks")
+
+            if not documents:
+                raise ValueError("No documents found in data folder.")
 
         # Step 3: Build vector store
         with st.spinner("⏳ Step 3/4: Building vector store..."):
@@ -105,13 +102,11 @@ def load_rag_system(source_choice: str, _uploaded_file_paths: Optional[list] = N
 
 
 def display_sidebar():
-    """Display sidebar with source selection"""
     with st.sidebar:
         st.title("⚙️ Settings")
 
         st.markdown("---")
 
-        # Source selection with radio buttons
         st.subheader("📚 Document Sources")
 
         source_choice = st.radio(
@@ -123,63 +118,54 @@ def display_sidebar():
                 "both": "📚 Both Local & Web",
             }[x],
             index=["local", "web", "both"].index(st.session_state.source_choice),
-            help="Choose which sources to use for answering questions",
         )
 
-        # Update session state
         if source_choice != st.session_state.source_choice:
             st.session_state.source_choice = source_choice
             st.session_state.is_ready = False
             st.session_state.initialized_with = None
-            # Clear cache to reload with new sources
             st.cache_resource.clear()
             st.rerun()
 
         st.markdown("---")
 
-        # File uploader
+        # Upload PDFs → Save directly into /data folder
         st.subheader("📎 Upload Documents")
 
         uploaded_files = st.file_uploader(
             "Upload your PDF files",
             type=["pdf"],
             accept_multiple_files=True,
-            help="Upload PDF documents to add to the knowledge base",
+            key="pdf_uploader",
         )
 
-        # Process uploaded files
         if uploaded_files:
-            import tempfile
+            data_dir = Path("data")
+            data_dir.mkdir(exist_ok=True)
 
-            temp_paths = []
+            saved_paths = []
 
             for uploaded_file in uploaded_files:
-                # Save to temporary location
-                with tempfile.NamedTemporaryFile(
-                    delete=False, suffix=".pdf"
-                ) as tmp_file:
-                    tmp_file.write(uploaded_file.getvalue())
-                    temp_paths.append(tmp_file.name)
+                save_path = data_dir / uploaded_file.name
 
-            # Update session state
-            if temp_paths != st.session_state.uploaded_files:
-                st.session_state.uploaded_files = temp_paths
+                with open(save_path, "wb") as f:
+                    f.write(uploaded_file.getvalue())
+
+                saved_paths.append(str(save_path))
+
+            if saved_paths != st.session_state.uploaded_files:
+                st.session_state.uploaded_files = saved_paths
                 st.session_state.is_ready = False
                 st.session_state.initialized_with = None
                 st.cache_resource.clear()
 
-            st.success(f"📄 {len(uploaded_files)} file(s) uploaded")
-        else:
-            if st.session_state.uploaded_files:
-                # Clear uploaded files
-                st.session_state.uploaded_files = []
-                st.session_state.is_ready = False
-                st.session_state.initialized_with = None
-                st.cache_resource.clear()
+            st.success(f"📄 {len(uploaded_files)} file(s) saved to data folder")
+
+        if st.session_state.uploaded_files:
+            st.info(f"✅ {len(st.session_state.uploaded_files)} file(s) ready in data/")
 
         st.markdown("---")
 
-        # Initialize button
         if (
             not st.session_state.is_ready
             or st.session_state.initialized_with != source_choice
@@ -188,9 +174,7 @@ def display_sidebar():
                 "🚀 Initialize System", type="primary", use_container_width=True
             ):
                 with st.spinner("Initializing RAG system..."):
-                    rag_system, doc_count, sources = load_rag_system(
-                        source_choice, st.session_state.uploaded_files
-                    )
+                    rag_system, doc_count, sources = load_rag_system(source_choice)
 
                     if rag_system:
                         st.session_state.rag_system = rag_system
@@ -203,7 +187,6 @@ def display_sidebar():
             st.success(f"✅ System Ready")
             st.info(f"Using: **{st.session_state.source_choice}** sources")
 
-            # Reset button
             if st.button("🔄 Reinitialize", use_container_width=True):
                 st.session_state.is_ready = False
                 st.session_state.initialized_with = None
@@ -212,7 +195,6 @@ def display_sidebar():
 
         st.markdown("---")
 
-        # System info
         st.subheader("ℹ️ System Info")
         if st.session_state.is_ready:
             st.write("**Status:** 🟢 Ready")
@@ -226,93 +208,61 @@ def display_sidebar():
 
         st.markdown("---")
 
-        # Clear chat button
         if st.button("🗑️ Clear Chat", use_container_width=True):
             st.session_state.messages = []
             st.rerun()
 
 
 def display_chat_interface():
-    """Display main chat interface"""
     st.title("🤖 RAG Document Assistant")
 
-    # Display welcome message if not initialized
     if not st.session_state.is_ready:
         st.info(
             "👈 **Please select your document sources in the sidebar and click 'Initialize System' to begin!**"
         )
-        st.markdown("---")
-        st.markdown(
-            """
-            ### Features:
-            - 📁 **Local PDFs** - Query documents from your data folder
-            - 🌐 **Web Sources** - Query online articles and blogs
-            - 🔍 **Hybrid Search** - Combines document retrieval with web search
-            - 🤖 **AI Agent** - Intelligent tool selection for better answers
-            
-            ### How to Use:
-            1. Select document sources in the sidebar
-            2. Click "Initialize System"
-            3. Start asking questions!
-            """
-        )
         return
 
-    # Display chat messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-            # Display sources if available
             if "sources" in message and message["sources"]:
-                with st.expander("📄 View Sources"):
-                    for i, source in enumerate(message["sources"], 1):
-                        st.markdown(f"**Source {i}:** `{source['source']}`")
-                        st.markdown(f"_{source['content']}_")
-                        st.markdown("---")
+                st.markdown("**Sources:**")
+                for i, source in enumerate(message["sources"], 1):
+                    st.markdown(f"{i}. {source['source']}")
 
-    # Chat input
     if prompt := st.chat_input("Ask a question about your documents..."):
-        # Add user message
         st.session_state.messages.append({"role": "user", "content": prompt})
 
-        # Display user message
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Generate response
         with st.chat_message("assistant"):
             with st.spinner("🤔 Thinking..."):
                 try:
-                    # Query RAG system
                     result = st.session_state.rag_system.run(prompt)
-
-                    # Get answer
                     answer = result.get("answer", "No answer generated")
-
-                    # Display answer
                     st.markdown(answer)
 
-                    # Prepare sources for display
                     sources = []
                     retrieved_docs = result.get("retrieved_docs", [])
+
                     if retrieved_docs:
                         for doc in retrieved_docs[:3]:
                             metadata = getattr(doc, "metadata", {}) or {}
                             source = metadata.get("source", "Unknown")
-                            content = doc.page_content[:200].replace("\n", " ")
-                            if len(doc.page_content) > 200:
-                                content += "..."
-                            sources.append({"source": source, "content": content})
+                            doc_type = metadata.get("type", "")
 
-                        # Display sources in expander
-                        with st.expander("📄 View Sources"):
+                            if doc_type == "tool_result":
+                                continue
+
+                            sources.append({"source": source})
+
+                        if sources:
+                            st.markdown("**Sources:**")
                             for i, source in enumerate(sources, 1):
-                                st.markdown(f"**Source {i}:** `{source['source']}`")
-                                st.markdown(f"_{source['content']}_")
-                                st.markdown("---")
+                                st.markdown(f"{i}. {source['source']}")
 
-                    # Add assistant message with sources
                     st.session_state.messages.append(
                         {"role": "assistant", "content": answer, "sources": sources}
                     )
@@ -326,14 +276,8 @@ def display_chat_interface():
 
 
 def main():
-    """Main application"""
-    # Initialize session state
     init_session_state()
-
-    # Display sidebar
     display_sidebar()
-
-    # Display chat interface
     display_chat_interface()
 
 
