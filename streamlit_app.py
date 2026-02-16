@@ -49,16 +49,24 @@ def init_session_state():
         st.session_state.source_choice = "local"  # Default
     if "initialized_with" not in st.session_state:
         st.session_state.initialized_with = None
+    if "uploaded_files" not in st.session_state:
+        st.session_state.uploaded_files = []
+        st.session_state.initialized_with = None
 
 
 @st.cache_resource
-def load_rag_system(source_choice: str):
+def load_rag_system(source_choice: str, _uploaded_file_paths: list = None):
     """Load RAG system with caching"""
     try:
         logger.info(f"Loading RAG system with sources: {source_choice}")
 
         # Get sources based on choice
         sources = Config.get_sources(source_choice)
+
+        # Add uploaded files to sources
+        if _uploaded_file_paths:
+            sources.extend(_uploaded_file_paths)
+            logger.info(f"Added {len(_uploaded_file_paths)} uploaded files")
 
         # Step 1: Initialize LLM
         with st.spinner("⏳ Step 1/4: Initializing LLM..."):
@@ -129,6 +137,48 @@ def display_sidebar():
 
         st.markdown("---")
 
+        # File uploader
+        st.subheader("📎 Upload Documents")
+
+        uploaded_files = st.file_uploader(
+            "Upload your PDF files",
+            type=["pdf"],
+            accept_multiple_files=True,
+            help="Upload PDF documents to add to the knowledge base",
+        )
+
+        # Process uploaded files
+        if uploaded_files:
+            import tempfile
+
+            temp_paths = []
+
+            for uploaded_file in uploaded_files:
+                # Save to temporary location
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".pdf"
+                ) as tmp_file:
+                    tmp_file.write(uploaded_file.getvalue())
+                    temp_paths.append(tmp_file.name)
+
+            # Update session state
+            if temp_paths != st.session_state.uploaded_files:
+                st.session_state.uploaded_files = temp_paths
+                st.session_state.is_ready = False
+                st.session_state.initialized_with = None
+                st.cache_resource.clear()
+
+            st.success(f"📄 {len(uploaded_files)} file(s) uploaded")
+        else:
+            if st.session_state.uploaded_files:
+                # Clear uploaded files
+                st.session_state.uploaded_files = []
+                st.session_state.is_ready = False
+                st.session_state.initialized_with = None
+                st.cache_resource.clear()
+
+        st.markdown("---")
+
         # Initialize button
         if (
             not st.session_state.is_ready
@@ -138,7 +188,9 @@ def display_sidebar():
                 "🚀 Initialize System", type="primary", use_container_width=True
             ):
                 with st.spinner("Initializing RAG system..."):
-                    rag_system, doc_count, sources = load_rag_system(source_choice)
+                    rag_system, doc_count, sources = load_rag_system(
+                        source_choice, st.session_state.uploaded_files
+                    )
 
                     if rag_system:
                         st.session_state.rag_system = rag_system
@@ -165,6 +217,10 @@ def display_sidebar():
         if st.session_state.is_ready:
             st.write("**Status:** 🟢 Ready")
             st.write(f"**Sources:** {st.session_state.source_choice}")
+            if st.session_state.uploaded_files:
+                st.write(
+                    f"**Uploaded:** {len(st.session_state.uploaded_files)} file(s)"
+                )
         else:
             st.write("**Status:** 🔴 Not initialized")
 
