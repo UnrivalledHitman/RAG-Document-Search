@@ -30,7 +30,7 @@ dependencies = [
     "langgraph>=1.0.6",
     "langgraph-cli[inmem]>=0.4.12",
     "tavily-python",
-    "chainlit",
+    "streamlit",
     "requests>=2.32.5",
     "pypdf>=6.7.0",
 ]
