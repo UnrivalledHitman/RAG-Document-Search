@@ -148,7 +148,33 @@ class RAGNodes:
 
             messages = result.get("messages", [])
             answer: Optional[str] = None
+            actual_sources = []
 
+            # Extract answer and tool calls
+            for msg in messages:
+                # Check if this is a tool call message
+                if hasattr(msg, "tool_calls") and msg.tool_calls:
+                    for tool_call in msg.tool_calls:
+                        tool_name = tool_call.get("name", "unknown")
+                        print(f"🔧 Tool used: {tool_name}")
+
+                # Check if this is a tool result message
+                if hasattr(msg, "name"):
+                    tool_name = getattr(msg, "name", "")
+                    content = getattr(msg, "content", "")
+
+                    # Create a document-like object for tool results
+                    if content and len(content) > 0:
+                        doc = Document(
+                            page_content=content[:500],  # Truncate long results
+                            metadata={
+                                "source": f"{tool_name} tool",
+                                "type": "tool_result",
+                            },
+                        )
+                        actual_sources.append(doc)
+
+            # Get final answer
             if messages:
                 answer_msg = messages[-1]
                 answer = getattr(answer_msg, "content", None)
@@ -156,9 +182,14 @@ class RAGNodes:
             final_answer = answer or "Could not generate answer."
             print(f"✅ Answer generated ({len(final_answer)} chars)")
 
+            # Use actual sources if available, otherwise fall back to retrieved_docs
+            sources_to_return = (
+                actual_sources if actual_sources else state.retrieved_docs
+            )
+
             return RAGState(
                 question=state.question,
-                retrieved_docs=state.retrieved_docs,
+                retrieved_docs=sources_to_return,
                 answer=final_answer,
             )
 
