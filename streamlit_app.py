@@ -55,7 +55,7 @@ def init_session_state():
 
 
 @st.cache_resource
-def load_rag_system(source_choice: str, _uploaded_file_paths: list = None):
+def load_rag_system(source_choice: str, _uploaded_file_paths: Optional[list] = None):
     """Load RAG system with caching"""
     try:
         logger.info(f"Loading RAG system with sources: {source_choice}")
